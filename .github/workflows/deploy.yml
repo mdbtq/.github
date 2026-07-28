@@ -45,16 +45,19 @@ on:
       DEPLOY_SSH_KEY:
         required: true
 
-# One deploy at a time per environment: two concurrent runs would race on the
-# same .env and could leave the host on the older of the two tags.
-concurrency:
-  group: deploy-${{ inputs.environment }}-${{ github.repository }}
-  cancel-in-progress: false
-
 jobs:
   deploy:
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
+    # One deploy at a time per environment: two concurrent runs would race on
+    # the same .env and could leave the host on the older of the two tags.
+    #
+    # Declared on the job, not the workflow: `inputs` is not available in a
+    # workflow-level concurrency expression, which fails the run at startup
+    # before any step executes.
+    concurrency:
+      group: deploy-${{ inputs.environment }}-${{ github.repository }}
+      cancel-in-progress: false
     permissions:
       contents: read
       packages: write

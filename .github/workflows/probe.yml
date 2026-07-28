@@ -4,11 +4,18 @@ on:
 jobs:
   probe:
     runs-on: ubuntu-latest
-    environment: probe
+    strategy:
+      fail-fast: false
+      matrix:
+        attempt: [1, 2, 3]
     steps:
-      - name: Runner IP
-        run: curl -s https://api.ipify.org; echo
-      - name: Raw SSH handshake (verbose, no key)
+      - name: Attempt ${{ matrix.attempt }}
         run: |
-          timeout 25 ssh -vv -o BatchMode=yes -o StrictHostKeyChecking=no \
-            -o ConnectTimeout=15 deploy@45.9.188.195 true 2>&1 | tail -25 || true
+          IP=$(curl -s https://api.ipify.org)
+          for t in 45.9.188.195 46.202.153.57; do
+            if timeout 12 bash -c "cat </dev/null >/dev/tcp/$t/22" 2>/dev/null; then
+              echo "RESULT from=$IP to=$t OPEN"
+            else
+              echo "RESULT from=$IP to=$t TIMEOUT"
+            fi
+          done

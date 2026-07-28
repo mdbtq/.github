@@ -98,7 +98,15 @@ jobs:
           provenance: false
           sbom: false
 
+      # Connecting occasionally times out between GitHub's runners and the
+      # host, with the packets never reaching sshd — so the first attempt is
+      # allowed to fail. Failing the whole deploy over one dropped connection
+      # would leave an image built and pushed but never rolled out.
+      #
+      # deploy.sh is idempotent, so a retry after a partial run is safe.
       - name: Deploy
+        id: deploy
+        continue-on-error: true
         uses: appleboy/ssh-action@029f5b4aeeeb58fdfe1410a5d17f967dacf36262 # v1.0.3
         env:
           # A private repo's image is private too, so the host has to
@@ -112,6 +120,26 @@ jobs:
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           timeout: 60s
+          command_timeout: 15m
+          envs: REGISTRY_TOKEN
+          script: |
+            set -euo pipefail
+            echo "$REGISTRY_TOKEN" | docker login ghcr.io \
+              -u "${{ github.actor }}" --password-stdin
+            trap 'docker logout ghcr.io >/dev/null 2>&1 || true' EXIT
+            cd "${{ env.APP_DIR }}"
+            ./deploy.sh "${{ github.sha }}"
+
+      - name: Deploy (retry)
+        if: steps.deploy.outcome == 'failure'
+        uses: appleboy/ssh-action@029f5b4aeeeb58fdfe1410a5d17f967dacf36262 # v1.0.3
+        env:
+          REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          timeout: 120s
           command_timeout: 15m
           envs: REGISTRY_TOKEN
           script: |

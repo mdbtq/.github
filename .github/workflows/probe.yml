@@ -4,19 +4,11 @@ on:
 jobs:
   probe:
     runs-on: ubuntu-latest
+    environment: probe
     steps:
-      - name: Where are we
+      - name: Runner IP
         run: curl -s https://api.ipify.org; echo
-      - name: TCP reachability
+      - name: Raw SSH handshake (verbose, no key)
         run: |
-          for target in 45.9.188.195 46.202.153.57; do
-            echo "--- $target:22"
-            timeout 10 bash -c "cat < /dev/null > /dev/tcp/$target/22" \
-              && echo "OPEN" || echo "BLOCKED/timeout"
-          done
-      - name: Ports 80/443 for comparison
-        run: |
-          for p in 80 443; do
-            timeout 8 bash -c "cat < /dev/null > /dev/tcp/45.9.188.195/$p" \
-              && echo "45.9.188.195:$p OPEN" || echo "45.9.188.195:$p blocked"
-          done
+          timeout 25 ssh -vv -o BatchMode=yes -o StrictHostKeyChecking=no \
+            -o ConnectTimeout=15 deploy@45.9.188.195 true 2>&1 | tail -25 || true

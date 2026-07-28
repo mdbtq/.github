@@ -1,0 +1,10 @@
+name: Selftest
+on:
+  workflow_dispatch:
+jobs:
+  call:
+    uses: mdbtq/.github/.github/workflows/deploy.yml@main
+    secrets:
+      DEPLOY_HOST: unused
+      DEPLOY_USER: unused
+      DEPLOY_SSH_KEY: unused

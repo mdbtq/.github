@@ -1,0 +1,22 @@
+name: Probe
+on:
+  workflow_dispatch:
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Where are we
+        run: curl -s https://api.ipify.org; echo
+      - name: TCP reachability
+        run: |
+          for target in 45.9.188.195 46.202.153.57; do
+            echo "--- $target:22"
+            timeout 10 bash -c "cat < /dev/null > /dev/tcp/$target/22" \
+              && echo "OPEN" || echo "BLOCKED/timeout"
+          done
+      - name: Ports 80/443 for comparison
+        run: |
+          for p in 80 443; do
+            timeout 8 bash -c "cat < /dev/null > /dev/tcp/45.9.188.195/$p" \
+              && echo "45.9.188.195:$p OPEN" || echo "45.9.188.195:$p blocked"
+          done

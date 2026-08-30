@@ -16,6 +16,11 @@
 # tag. The host already has the compose file and .env from provisioning, so
 # nothing but the tag travels — and deploy.sh rolls back on its own when the new
 # image fails its healthcheck.
+#
+# An app whose host pulls its own deploys passes `deploy_over_ssh: false` and
+# gets the build and push only; a timer on the host does the rollout within a
+# minute. A green run then means the image was pushed, not that it is serving —
+# `make check` in mdbtq/ops is what reports the rollout.
 name: Deploy
 
 on:
@@ -37,13 +42,24 @@ on:
         description: Newline-separated build arguments.
         type: string
         default: ""
+      deploy_over_ssh:
+        description: >-
+          Whether this workflow rolls the new image out over SSH. Set false for
+          an app whose host pulls its own deploys — see docs/proposed-pull-deploy.md
+          in mdbtq/ops. The build and push are unchanged either way; only the
+          rollout step is skipped, and the DEPLOY_* secrets stop being read.
+        type: boolean
+        default: true
     secrets:
+      # Not required: an app that deploys by pull has no use for them, and
+      # declaring them required would force every such repository to keep a
+      # deploy key it never uses.
       DEPLOY_HOST:
-        required: true
+        required: false
       DEPLOY_USER:
-        required: true
+        required: false
       DEPLOY_SSH_KEY:
-        required: true
+        required: false
 
 jobs:
   deploy:
@@ -112,6 +128,7 @@ jobs:
       # deploy.sh is idempotent, so a retry after a partial run is safe.
       - name: Deploy
         id: deploy
+        if: inputs.deploy_over_ssh
         continue-on-error: true
         uses: appleboy/ssh-action@029f5b4aeeeb58fdfe1410a5d17f967dacf36262 # v1.0.3
         env:
@@ -136,8 +153,17 @@ jobs:
             cd "${{ env.APP_DIR }}"
             ./deploy.sh "${{ github.sha }}"
 
+      # Without this a pull-deploy run just ends after the push, and the log
+      # gives no hint that the rollout is someone else's job.
+      - name: Note that the host pulls this deploy
+        if: ${{ !inputs.deploy_over_ssh }}
+        run: |
+          echo "Pushed ${{ env.IMAGE }}:${{ github.sha }}."
+          echo "This app deploys by pull: a timer on the host rolls it out within a minute."
+          echo "It is not serving yet when this run goes green."
+
       - name: Deploy (retry)
-        if: steps.deploy.outcome == 'failure'
+        if: inputs.deploy_over_ssh && steps.deploy.outcome == 'failure'
         uses: appleboy/ssh-action@029f5b4aeeeb58fdfe1410a5d17f967dacf36262 # v1.0.3
         env:
           REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}

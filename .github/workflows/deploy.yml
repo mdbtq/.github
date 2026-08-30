@@ -93,6 +93,12 @@ jobs:
           tags: |
             ${{ env.IMAGE }}:${{ github.sha }}
             ${{ env.IMAGE }}:latest
+          # Stamps the commit into the image itself. A host that sees only a
+          # digest — as a poller watching `latest` does — can read the SHA back
+          # out of the image config and deploy that tag, without asking the
+          # registry API which tags share a digest or trusting a second tag to
+          # stay in step. See docs/proposed-pull-deploy.md.
+          labels: org.opencontainers.image.revision=${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           provenance: false

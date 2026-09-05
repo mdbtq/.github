@@ -153,6 +153,14 @@ jobs:
             cd "${{ env.APP_DIR }}"
             ./deploy.sh "${{ github.sha }}"
 
+      # `continue-on-error` above reports the step as successful whichever way
+      # it went, so a run whose first attempt timed out reads as "deployed, then
+      # retried" in the step list and the API. This turns that into a warning
+      # annotation, leaving the retry logic below untouched.
+      - name: Note that the first deploy attempt failed
+        if: inputs.deploy_over_ssh && steps.deploy.outcome == 'failure'
+        run: echo "::warning::First SSH deploy attempt failed; retrying. The step above is reported as successful because it is allowed to fail."
+
       # Without this a pull-deploy run just ends after the push, and the log
       # gives no hint that the rollout is someone else's job.
       - name: Note that the host pulls this deploy
